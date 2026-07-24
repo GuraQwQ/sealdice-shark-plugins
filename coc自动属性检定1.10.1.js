@@ -137,10 +137,16 @@ function buildRAText(ctx, attrDisplayName, attrValue) {
     var ruleIndex = ctx.group ? ctx.group.cocRuleIndex : 0;
     var result = checkRoll(ruleIndex, d100, attrValue);
 
+    seal.vars.strSet(ctx, '$t检定表达式文本', attrDisplayName);
+    seal.vars.strSet(ctx, '$t检定计算过程', '');
+    seal.vars.intSet(ctx, '$tD100', d100);
     seal.vars.strSet(ctx, '$t属性表达式文本', attrDisplayName);
     seal.vars.intSet(ctx, '$t骰子出目', d100);
+    seal.vars.intSet(ctx, '$t检定结果', d100);
     seal.vars.intSet(ctx, '$t判定值', attrValue);
     seal.vars.strSet(ctx, '$t判定结果', result.levelName);
+    seal.vars.strSet(ctx, '$t判定结果_详细', result.levelName);
+    seal.vars.strSet(ctx, '$t判定结果_简短', result.levelName);
     seal.vars.intSet(ctx, '$tSuccessRank', result.rank);
 
     var tmplText = seal.formatTmpl(ctx, 'COC:检定_单项结果文本');
