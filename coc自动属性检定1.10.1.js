@@ -1,19 +1,19 @@
 // ==UserScript==
 // @name         COC7th自动属性检定
 // @author       一只鲨鱼鱼
-// @version      1.10.1
-// @description  COC7th规则扩展：监听.sc/.st/.hp指令，自动进行智力/体质检定。群聊设置，默认开启，配置项全面可编辑。
+// @version      1.11.0
+// @description  COC7th规则扩展：监听.sc/.st/.hp指令，自动进行智力/体质检定和神话淬炼。默认开启，配置项全面可编辑。
 // @timestamp    1714147200
 // @license      MIT
 // @homepageURL  https://github.com/GuraQwQ/sealdice-shark-plugins
-// @updateUrl    https://raw.githubusercontent.com/GuraQwQ/sealdice-shark-plugins/main/coc自动属性检定.js
+// @updateUrl    https://raw.githubusercontent.com/GuraQwQ/sealdice-shark-plugins/main/coc%E8%87%AA%E5%8A%A8%E5%B1%9E%E6%80%A7%E6%A3%80%E5%AE%9A1.10.1.js
 // @sealVersion  1.4.5
 // ==/UserScript==
 
 'use strict';
 
 var PLUGIN_NAME = 'COC7th自动属性检定';
-var PLUGIN_VER = '1.10.1';
+var PLUGIN_VER = '1.11.0';
 var PLUGIN_AUTHOR = '一只鲨鱼鱼';
 
 // 属性名候选
@@ -29,6 +29,7 @@ var ATTR_NAMES = {
 var DEFAULT_SETTINGS = {
     autoInt: true,
     autoCon: true,
+    autoMythosHardened: true,
     intThreshold: 5
 };
 
@@ -49,12 +50,12 @@ function getAttrValue(ctx, attrType) {
 }
 
 function getSettingsKey(ctx) {
-    var gid = ctx.group ? ctx.group.groupId : 'private';
+    var gid = ctx.isPrivate ? 'private_' + (ctx.player ? ctx.player.userId : 'unknown') : ctx.group.groupId;
     return 'coc_auto_check_group_' + gid;
 }
 
 function makeDefaultSettings() {
-    return { autoInt: true, autoCon: true, autoInsanity: true, intThreshold: 5 };
+    return { autoInt: true, autoCon: true, autoInsanity: true, autoMythosHardened: true, intThreshold: 5 };
 }
 
 function loadSettings(ext, ctx) {
@@ -560,12 +561,13 @@ var HELP_TEXT = '【' + PLUGIN_NAME + ' v' + PLUGIN_VER + '】\n\n' +
 '   • 智力失败 → 拒绝理解 → 不陷入疯狂\n' +
 '   • SAN归零 → 不定性疯狂\n\n' +
 '2. 一次损失≥HPmax/2的HP → 重伤体质检定\n' +
-'3. HP归零 → 濒死体质检定\n\n' +
+'3. HP归零 → 濒死体质检定\n' +
+'4. 克苏鲁神话 > 当前理智 → 永久神话淬炼，后续SAN损失减半\n\n' +
 '🎲 规则检测：若检测到DND角色卡属性（如AC、熟练加值等），自动跳过COC检定\n\n' +
-'⚙️ 设置指令（群聊统一管理，默认开启）：\n' +
-'.自动属性检定              查看当前群聊设置\n' +
+'⚙️ 设置指令（群聊/私聊分别保存，默认开启）：\n' +
+'.自动属性检定              查看当前设置\n' +
 '.自动属性检定 help         帮助\n' +
-'.自动属性检定 智力/体质/疯狂  开关单项\n' +
+'.自动属性检定 智力/体质/疯狂/神话淬炼  开关单项\n' +
 '.自动属性检定 开启/关闭    全开/全关\n';
 
 var cmd = seal.ext.newCmdItemInfo();
@@ -580,37 +582,43 @@ cmd.solve = function(ctx, msg, cmdArgs) {
         return seal.ext.newCmdExecuteResult(true);
     }
     if (!arg1 || arg1 === '状态' || arg1 === 'st' || arg1 === 'status') {
-        var s = '【群聊自动属性检定状态】\n';
-        s += '智力检定: ' + (settings.autoInt ? '✅开启' : '❌关闭') + ' | 体质检定: ' + (settings.autoCon ? '✅开启' : '❌关闭') + ' | 疯狂症状: ' + (settings.autoInsanity ? '✅开启' : '❌关闭');
+        var s = '【' + (ctx.isPrivate ? '私聊' : '群聊') + '自动属性检定状态】\n';
+        s += '智力检定: ' + (settings.autoInt ? '✅开启' : '❌关闭') + ' | 体质检定: ' + (settings.autoCon ? '✅开启' : '❌关闭') + ' | 疯狂症状: ' + (settings.autoInsanity ? '✅开启' : '❌关闭') + ' | 神话淬炼: ' + (settings.autoMythosHardened ? '✅开启' : '❌关闭');
         seal.replyToSender(ctx, msg, s);
         return seal.ext.newCmdExecuteResult(true);
     }
     if (arg1 === '智力' || arg1 === 'int') {
         settings.autoInt = !settings.autoInt;
         saveSettings(ext, ctx, settings);
-        seal.replyToSender(ctx, msg, '自动智力检定已' + (settings.autoInt ? '✅开启（全群生效）' : '❌关闭'));
+        seal.replyToSender(ctx, msg, '自动智力检定已' + (settings.autoInt ? '✅开启（当前会话生效）' : '❌关闭'));
         return seal.ext.newCmdExecuteResult(true);
     }
     if (arg1 === '体质' || arg1 === 'con') {
         settings.autoCon = !settings.autoCon;
         saveSettings(ext, ctx, settings);
-        seal.replyToSender(ctx, msg, '自动体质检定已' + (settings.autoCon ? '✅开启（全群生效）' : '❌关闭'));
+        seal.replyToSender(ctx, msg, '自动体质检定已' + (settings.autoCon ? '✅开启（当前会话生效）' : '❌关闭'));
         return seal.ext.newCmdExecuteResult(true);
     }
     if (arg1 === '疯狂' || arg1 === 'insanity' || arg1 === 'ti') {
         settings.autoInsanity = !settings.autoInsanity;
         saveSettings(ext, ctx, settings);
-        seal.replyToSender(ctx, msg, '自动疯狂症状抽取已' + (settings.autoInsanity ? '✅开启（全群生效）' : '❌关闭'));
+        seal.replyToSender(ctx, msg, '自动疯狂症状抽取已' + (settings.autoInsanity ? '✅开启（当前会话生效）' : '❌关闭'));
+        return seal.ext.newCmdExecuteResult(true);
+    }
+    if (arg1 === '神话淬炼' || arg1 === '精神固化' || arg1 === '固化') {
+        settings.autoMythosHardened = !settings.autoMythosHardened;
+        saveSettings(ext, ctx, settings);
+        seal.replyToSender(ctx, msg, '自动神话淬炼已' + (settings.autoMythosHardened ? '✅开启' : '❌关闭'));
         return seal.ext.newCmdExecuteResult(true);
     }
     if (arg1 === '开启' || arg1 === 'on') {
-        settings.autoInt = true; settings.autoCon = true; settings.autoInsanity = true;
+        settings.autoInt = true; settings.autoCon = true; settings.autoInsanity = true; settings.autoMythosHardened = true;
         saveSettings(ext, ctx, settings);
-        seal.replyToSender(ctx, msg, '全部自动检定已 ✅ 开启（全群生效）');
+        seal.replyToSender(ctx, msg, '全部自动检定已 ✅ 开启（当前会话生效）');
         return seal.ext.newCmdExecuteResult(true);
     }
     if (arg1 === '关闭' || arg1 === 'off') {
-        settings.autoInt = false; settings.autoCon = false; settings.autoInsanity = false;
+        settings.autoInt = false; settings.autoCon = false; settings.autoInsanity = false; settings.autoMythosHardened = false;
         saveSettings(ext, ctx, settings);
         seal.replyToSender(ctx, msg, '全部自动检定已 ❌ 关闭');
         return seal.ext.newCmdExecuteResult(true);
@@ -665,6 +673,11 @@ seal.ext.registerStringConfig(ext, 'no_attr_int', '未能在角色卡中找到�
 seal.ext.registerStringConfig(ext, 'no_attr_con', '未能在角色卡中找到【体质】属性，跳过体质检定。\n💡 使用 .st 体质 <值> 设置属性，或 .自动属性检定 体质 关闭 禁用~', '缺少体质属性提示');
 
 // ==================== 钩子 ====================
+ext.onMessageReceived = function(ctx, msg) {
+    var settings = loadSettings(ext, ctx);
+    seal.vars.intSet(ctx, '$tCOC7自动神话淬炼', settings.autoMythosHardened ? 1 : 0);
+};
+
 ext.onCommandReceived = function(ctx, msg, cmdArgs) {
     return seal.ext.newCmdExecuteResult(true);
 };
